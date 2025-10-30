@@ -1,6 +1,6 @@
 {
-  "name": "dreams",
-  "version": "0.0.1",
+  "name": "vibe-trade",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -14,7 +14,11 @@
   },
   "dependencies": {
     "@lucid-dreams/agent-kit": "latest",
-    "zod": "^4.1.12"
+    "@ax-llm/ax": "latest",
+    "zod": "^4.1.12",
+    "axios": "^1.6.2",
+    "x402-axios": "^1.0.0",
+    "viem": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",

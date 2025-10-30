@@ -5,6 +5,9 @@ import {
   AgentKitConfig,
 } from "@lucid-dreams/agent-kit";
 import { flow } from "@ax-llm/ax";
+import axios from "axios";
+import { withPaymentInterceptor, decodeXPaymentResponse } from "x402-axios";
+import { privateKeyToAccount } from "viem/accounts";
 
 /**
  * Vibe Trade - AI-Powered Trading Intelligence Nanoservice
@@ -55,6 +58,28 @@ if (!axClient.isConfigured()) {
   );
 }
 
+// Initialize x402 clients for calling other endpoints
+const WALLET_PRIVATE_KEY = process.env.PRIVATE_KEY;
+let x402Client: any = null;
+
+function initializeX402Client() {
+  if (x402Client) return x402Client;
+  
+  if (!WALLET_PRIVATE_KEY) {
+    console.warn("[vibe-trade] PRIVATE_KEY not set - x402 calls will fail");
+    return null;
+  }
+
+  try {
+    const account = privateKeyToAccount(WALLET_PRIVATE_KEY as `0x${string}`);
+    x402Client = withPaymentInterceptor(axios.create(), account);
+    return x402Client;
+  } catch (error) {
+    console.error("[vibe-trade] Failed to initialize x402 client:", error);
+    return null;
+  }
+}
+
 // Routing decision flow - decides which data sources to call
 const routingFlow = flow<{ symbol: string; query: string }>()
   .node(
@@ -73,6 +98,42 @@ const routingFlow = flow<{ symbol: string; query: string }>()
       return { call_taapi: true, call_aixbt: true };
     }
   });
+
+// Helper function to call x402 endpoints with timeout
+async function callX402Endpoint(
+  name: string,
+  endpoint: string,
+  payload: any,
+  timeoutMs: number = 2000
+): Promise<{ data: any; success: boolean }> {
+  const client = initializeX402Client();
+  if (!client) {
+    console.warn(`[vibe-trade] ${name} client not initialized`);
+    return { data: null, success: false };
+  }
+
+  try {
+    const result = await Promise.race([
+      client.post(endpoint, payload),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout")), timeoutMs)
+      ),
+    ]);
+
+    // Extract payment response
+    const paymentResponse = decodeXPaymentResponse(
+      result.headers["x-payment-response"]
+    );
+    console.log(
+      `[vibe-trade] ${name} payment confirmed: ${paymentResponse.transaction_hash}`
+    );
+
+    return { data: result.data, success: true };
+  } catch (error) {
+    console.warn(`[vibe-trade] ${name} call failed:`, error);
+    return { data: null, success: false };
+  }
+}
 
 const { app, addEntrypoint } = createAgentApp(
   {
@@ -162,52 +223,45 @@ addEntrypoint({
     let technicalData: any = null;
     let sentimentData: any = null;
 
-    const callWithTimeout = async (
-      name: string,
-      fn: () => Promise<any>,
-      timeoutMs: number = 2000
-    ) => {
-      try {
-        const result = await Promise.race([
-          fn(),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout")), timeoutMs)
-          ),
-        ]);
-        sourcesCalled.push(name);
-        return result;
-      } catch (error) {
-        console.warn(`[vibe-trade] ${name} call failed:`, error);
-        return null;
-      }
-    };
-
-    // Parallel execution
-    const [technical, sentiment] = await Promise.all([
+    // Parallel execution of x402 calls
+    const [taapiResult, aixbtResult] = await Promise.all([
       routingDecision.call_taapi
-        ? callWithTimeout("TAAPI", async () => ({
-            indicators: {
-              rsi: 65,
-              macd: { status: "bullish_crossover" },
-              moving_averages: { alignment: "aligned_uptrend" },
-            },
-            pattern: "ascending_triangle",
-            strength: 0.78,
-            trend: "uptrend",
-          }))
-        : Promise.resolve(null),
+        ? callX402Endpoint(
+            "TAAPI",
+            process.env.TAAPI_ENDPOINT || "https://api.taapi.io/x402",
+            {
+              symbol,
+              interval: timeframe,
+              indicators: ["rsi", "macd", "sma", "ema", "bbands", "atr"],
+            }
+          )
+        : Promise.resolve({ data: null, success: false }),
       routingDecision.call_aixbt
-        ? callWithTimeout("AIXBT", async () => ({
-            market_sentiment: "bullish",
-            narrative: "Fed pivot expectations",
-            confidence: 0.72,
-            whale_activity: { large_buys_24h: 45, net_flow: "bullish" },
-          }))
-        : Promise.resolve(null),
+        ? callX402Endpoint(
+            "AIXBT",
+            process.env.AIXBT_ENDPOINT ||
+              "https://api.aixbt.tech/x402/agents/indigo",
+            {
+              messages: [
+                {
+                  role: "user",
+                  content: `Analyze market sentiment for ${symbol}. Provide: market sentiment (bullish/bearish/neutral), dominant narrative, confidence score (0-1), whale activity, and on-chain metrics.`,
+                },
+              ],
+            }
+          )
+        : Promise.resolve({ data: null, success: false }),
     ]);
 
-    technicalData = technical;
-    sentimentData = sentiment;
+    // Track which sources succeeded
+    if (taapiResult.success) {
+      sourcesCalled.push("TAAPI");
+      technicalData = taapiResult.data;
+    }
+    if (aixbtResult.success) {
+      sourcesCalled.push("AIXBT");
+      sentimentData = aixbtResult.data;
+    }
 
     // Step 3: Generate recommendation from available data
     const recommendation = {
