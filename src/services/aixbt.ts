@@ -1,22 +1,44 @@
 // AIXBT Market Sentiment Service - x402 Endpoint
 // Vibe Trade calls AIXBT via x402 payments to get market sentiment
 import axios from "axios";
+import { withPaymentInterceptor, decodeXPaymentResponse } from "x402-axios";
+import { privateKeyToAccount } from "viem/accounts";
 
-const AIXBT_ENDPOINT = "https://api.aixbt.tech/x402/agents/indigo";
+const AIXBT_ENDPOINT = process.env.AIXBT_ENDPOINT || "https://api.aixbt.tech/x402/agents/indigo";
+const WALLET_PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY;
+
+let aixbtClient: any = null;
+
+/**
+ * Initialize AIXBT client with x402 payment interceptor
+ * Uses Vibe Trade's wallet to pay AIXBT for sentiment analysis
+ */
+function initializeAIXBTClient() {
+  if (aixbtClient) return aixbtClient;
+
+  if (!WALLET_PRIVATE_KEY) {
+    console.warn("WALLET_PRIVATE_KEY not set - AIXBT calls will fail");
+    return axios.create();
+  }
+
+  const account = privateKeyToAccount(WALLET_PRIVATE_KEY as `0x${string}`);
+  aixbtClient = withPaymentInterceptor(axios.create(), account);
+  return aixbtClient;
+}
 
 /**
  * Fetch market sentiment from AIXBT via x402 payment
- * Vibe Trade pays AIXBT using x402 protocol to access this data
+ * Vibe Trade pays AIXBT using x402 protocol to access sentiment data
  * 
  * @param symbol - Trading symbol to analyze
  * @returns Market sentiment data from AIXBT
  */
 export async function fetchMarketSentiment(symbol: string) {
   try {
-    // Call AIXBT x402 endpoint
-    // Note: In production, this would use x402-axios wrapper with client's wallet
-    // For now, returning mock data - client pays via x402 to access this service
-    const response = await axios.post(AIXBT_ENDPOINT, {
+    const client = initializeAIXBTClient();
+
+    // Call AIXBT x402 endpoint with automatic payment handling
+    const response = await client.post(AIXBT_ENDPOINT, {
       messages: [
         {
           role: "user",
@@ -24,6 +46,13 @@ export async function fetchMarketSentiment(symbol: string) {
         },
       ],
     });
+
+    // Extract payment response from headers
+    const paymentResponse = decodeXPaymentResponse(
+      response.headers["x-payment-response"]
+    );
+
+    console.log(`AIXBT payment confirmed: ${paymentResponse.transaction_hash}`);
 
     return parseAIXBTResponse(response.data);
   } catch (error) {

@@ -1,8 +1,30 @@
 // TAAPI Technical Indicators Service - x402 Endpoint
 // Vibe Trade calls TAAPI via x402 payments to get technical indicators
 import axios from "axios";
+import { withPaymentInterceptor, decodeXPaymentResponse } from "x402-axios";
+import { privateKeyToAccount } from "viem/accounts";
 
-const TAAPI_ENDPOINT = "https://api.taapi.io/x402";
+const TAAPI_ENDPOINT = process.env.TAAPI_ENDPOINT || "https://api.taapi.io/x402";
+const WALLET_PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY;
+
+let taapiClient: any = null;
+
+/**
+ * Initialize TAAPI client with x402 payment interceptor
+ * Uses Vibe Trade's wallet to pay TAAPI for technical indicators
+ */
+function initializeTAAPIClient() {
+  if (taapiClient) return taapiClient;
+
+  if (!WALLET_PRIVATE_KEY) {
+    console.warn("WALLET_PRIVATE_KEY not set - TAAPI calls will fail");
+    return axios.create();
+  }
+
+  const account = privateKeyToAccount(WALLET_PRIVATE_KEY as `0x${string}`);
+  taapiClient = withPaymentInterceptor(axios.create(), account);
+  return taapiClient;
+}
 
 /**
  * Fetch technical indicators from TAAPI via x402 payment
@@ -14,13 +36,21 @@ const TAAPI_ENDPOINT = "https://api.taapi.io/x402";
  */
 export async function fetchTechnicalIndicators(symbol: string, timeframe: string) {
   try {
-    // Call TAAPI x402 endpoint
-    // Note: In production, this would use x402-axios wrapper with client's wallet
-    const response = await axios.post(TAAPI_ENDPOINT, {
+    const client = initializeTAAPIClient();
+
+    // Call TAAPI x402 endpoint with automatic payment handling
+    const response = await client.post(TAAPI_ENDPOINT, {
       symbol,
       interval: timeframe,
       indicators: ["rsi", "macd", "sma", "ema", "bbands", "atr"],
     });
+
+    // Extract payment response from headers
+    const paymentResponse = decodeXPaymentResponse(
+      response.headers["x-payment-response"]
+    );
+
+    console.log(`TAAPI payment confirmed: ${paymentResponse.transaction_hash}`);
 
     return parseTAAPIResponse(response.data);
   } catch (error) {
