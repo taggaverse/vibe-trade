@@ -17,7 +17,7 @@
     "@ax-llm/ax": "latest",
     "zod": "^4.1.12",
     "axios": "^1.6.2",
-    "x402-axios": "^1.0.0",
+    "x402-axios": "latest",
     "viem": "^2.0.0"
   },
   "devDependencies": {
