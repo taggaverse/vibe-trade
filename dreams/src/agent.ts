@@ -80,6 +80,42 @@ function initializeX402Client() {
   }
 }
 
+// Helper function to call TAAPI standard API (not x402)
+async function callTAAPIStandardAPI(
+  symbol: string,
+  timeframe: string,
+  timeoutMs: number = 2000
+): Promise<{ data: any; success: boolean }> {
+  const apiKey = process.env.TAAPI_API_KEY;
+  if (!apiKey) {
+    console.warn("[vibe-trade] TAAPI_API_KEY not set");
+    return { data: null, success: false };
+  }
+
+  try {
+    const result = await Promise.race([
+      axios.get("https://api.taapi.io/ta", {
+        params: {
+          secret: apiKey,
+          exchange: "binance",
+          symbol: `${symbol}USDT`,
+          interval: timeframe,
+          indicators: "rsi,macd,sma,ema,bbands,atr",
+        },
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout")), timeoutMs)
+      ),
+    ]);
+
+    console.log("[vibe-trade] TAAPI call successful");
+    return { data: result.data, success: true };
+  } catch (error) {
+    console.warn("[vibe-trade] TAAPI call failed:", error);
+    return { data: null, success: false };
+  }
+}
+
 // Routing decision flow - decides which data sources to call
 const routingFlow = flow<{ symbol: string; query: string }>()
   .node(
@@ -223,18 +259,10 @@ addEntrypoint({
     let technicalData: any = null;
     let sentimentData: any = null;
 
-    // Parallel execution of x402 calls
+    // Parallel execution: TAAPI (standard API) + AIXBT (x402)
     const [taapiResult, aixbtResult] = await Promise.all([
       routingDecision.call_taapi
-        ? callX402Endpoint(
-            "TAAPI",
-            process.env.TAAPI_ENDPOINT || "https://api.taapi.io/x402",
-            {
-              symbol,
-              interval: timeframe,
-              indicators: ["rsi", "macd", "sma", "ema", "bbands", "atr"],
-            }
-          )
+        ? callTAAPIStandardAPI(symbol, timeframe)
         : Promise.resolve({ data: null, success: false }),
       routingDecision.call_aixbt
         ? callX402Endpoint(
