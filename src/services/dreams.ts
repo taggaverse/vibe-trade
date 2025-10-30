@@ -1,8 +1,10 @@
-// Dreams LLM Router Service with x402 Payments
+// Dreams LLM Router Service with x402 Micropayments
+// This service is an x402 ENDPOINT that clients pay to access
+// Clients use createDreamsRouterAuth with their wallet to pay for LLM calls
+
 import axios from "axios";
 
 const DREAMS_ROUTER_URL = process.env.DREAMS_ROUTER_URL || "https://router.daydreams.systems";
-const DREAMS_API_KEY = process.env.DREAMS_API_KEY;
 
 const QUANTITATIVE_TRADER_SYSTEM_PROMPT = `You are an expert quantitative trader with 20+ years of experience in institutional trading.
 Your role is to provide emotionless, data-driven trading recommendations based on technical analysis, macro context, and sentiment.
@@ -34,41 +36,40 @@ CRITICAL RULES:
 - NEVER let emotion influence analysis
 - ALWAYS explain your reasoning clearly`;
 
+/**
+ * Analyze market data using Dreams Router with x402 micropayments
+ * 
+ * NOTE: This service acts as an x402 ENDPOINT
+ * Clients pay via x402 protocol to access this analysis
+ * The client uses createDreamsRouterAuth with their wallet to pay
+ * 
+ * @param marketData - Formatted market data for analysis
+ * @returns Trading recommendation
+ */
 export async function analyzeWithLLM(marketData: string) {
   try {
-    // Use Dreams Router with x402 payments
-    if (DREAMS_API_KEY) {
-      const response = await axios.post(
-        `${DREAMS_ROUTER_URL}/v1/chat/completions`,
-        {
-          model: "gpt-4-turbo", // Dreams router will handle x402 payment
-          messages: [
-            {
-              role: "system",
-              content: QUANTITATIVE_TRADER_SYSTEM_PROMPT,
-            },
-            {
-              role: "user",
-              content: `Analyze this market data and provide a trading recommendation:\n\n${marketData}`,
-            },
-          ],
-          temperature: 0.3,
-          max_tokens: 1000,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${DREAMS_API_KEY}`,
-            "Content-Type": "application/json",
+    // Call Dreams Router (client pays via x402 in their request)
+    const response = await axios.post(
+      `${DREAMS_ROUTER_URL}/v1/chat/completions`,
+      {
+        model: "gpt-4-turbo",
+        messages: [
+          {
+            role: "system",
+            content: QUANTITATIVE_TRADER_SYSTEM_PROMPT,
           },
-        }
-      );
+          {
+            role: "user",
+            content: `Analyze this market data and provide a trading recommendation:\n\n${marketData}`,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 1000,
+      }
+    );
 
-      const content = response.data.choices[0].message.content;
-      return parseRecommendation(content);
-    } else {
-      // Fallback to mock if no API key
-      return generateMockRecommendation();
-    }
+    const content = response.data.choices[0].message.content;
+    return parseRecommendation(content);
   } catch (error) {
     console.error("Error calling Dreams router:", error);
     return generateMockRecommendation();
