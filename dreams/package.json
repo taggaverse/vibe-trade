@@ -18,7 +18,8 @@
     "zod": "^4.1.12",
     "axios": "^1.6.2",
     "x402-axios": "latest",
-    "viem": "^2.0.0"
+    "viem": "^2.0.0",
+    "onnxruntime-node": "^1.17.0"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",
