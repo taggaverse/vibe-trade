@@ -42,7 +42,7 @@ Vibe Trade provides **institutional-grade trading analysis** through a simple x4
 
 ### 1. **Intelligent Analysis Endpoint**
 ```
-GET /analyze?symbol=BTC&timeframe=1h
+POST /analyze
 ```
 Returns:
 - Technical analysis with confidence scores
@@ -53,7 +53,7 @@ Returns:
 
 ### 2. **Perpetuals Funding Endpoint**
 ```
-GET /perps-funding?markets=BTC,ETH,SOL
+POST /perps-funding
 ```
 Returns:
 - Current funding rates
@@ -133,6 +133,7 @@ DEBUG=true                                 # Enable debug logging
 ### Start the Server
 
 ```bash
+cd dreams
 bun run dev
 ```
 
@@ -316,10 +317,15 @@ Response to Client
 
 ## 📚 Documentation
 
-- **[HYPERLIQUID_INTEGRATION.md](./HYPERLIQUID_INTEGRATION.md)** - Perpetuals data integration
-- **[X402_PERPS_ENDPOINT.md](./X402_PERPS_ENDPOINT.md)** - Perpetuals funding endpoint
-- **[C2C_INTEGRATION_GUIDE.md](./C2C_INTEGRATION_GUIDE.md)** - C2C optimization details
-- **[TRAINING_DATA_INTEGRATION.md](./TRAINING_DATA_INTEGRATION.md)** - Training data collection
+All documentation is in the `/docs` folder:
+
+- **[C2C_INTEGRATION_GUIDE.md](./docs/C2C_INTEGRATION_GUIDE.md)** - C2C optimization details
+- **[C2C_PHASE1_SUMMARY.md](./docs/C2C_PHASE1_SUMMARY.md)** - Phase 1 implementation
+- **[C2C_PHASE2_SUMMARY.md](./docs/C2C_PHASE2_SUMMARY.md)** - Phase 2 integration
+- **[DATA_COLLECTION_GUIDE.md](./docs/DATA_COLLECTION_GUIDE.md)** - Training data collection
+- **[HYPERLIQUID_INTEGRATION.md](./docs/HYPERLIQUID_INTEGRATION.md)** - Perpetuals data integration
+- **[TRAINING_DATA_INTEGRATION.md](./docs/TRAINING_DATA_INTEGRATION.md)** - Training pipeline
+- **[X402_PERPS_ENDPOINT.md](./docs/X402_PERPS_ENDPOINT.md)** - Perpetuals funding endpoint
 
 ---
 
@@ -371,6 +377,49 @@ Response to Client
 - **Audit Ready:** Clean, well-documented code
 - **Privacy First:** No data collection beyond what's necessary
 - **Rate Limited:** Protection against abuse
+
+---
+
+## 📁 Project Structure
+
+```
+vibe-trade/
+├── README.md                    # This file
+├── .gitignore
+├── railway.json                 # Railway deployment config
+├── vibe.trade.code-workspace    # VS Code workspace
+│
+├── docs/                        # 📚 Documentation
+│   ├── C2C_INTEGRATION_GUIDE.md
+│   ├── C2C_PHASE1_SUMMARY.md
+│   ├── C2C_PHASE2_SUMMARY.md
+│   ├── DATA_COLLECTION_GUIDE.md
+│   ├── HYPERLIQUID_INTEGRATION.md
+│   ├── TRAINING_DATA_INTEGRATION.md
+│   └── X402_PERPS_ENDPOINT.md
+│
+├── scripts/                     # 🔧 Test & utility scripts
+│   ├── test-agent.sh
+│   └── test-c2c-integration.sh
+│
+└── dreams/                      # 🤖 Main agent application
+    ├── src/
+    │   ├── agent.ts             # Main agent definition
+    │   ├── index.ts             # HTTP server
+    │   ├── hyperliquid-perps.ts # Perpetuals integration
+    │   ├── c2c-wrapper.ts       # C2C optimization
+    │   ├── training-data-collector.ts
+    │   └── benchmarks.ts
+    │
+    ├── package.json
+    ├── tsconfig.json
+    ├── bun.lock
+    ├── .env.example             # Configuration template
+    ├── .env                     # Local configuration
+    ├── README.md                # Dreams app README
+    ├── training_data.jsonl      # Collected training data
+    └── test-*.sh                # Test scripts (moved to /scripts)
+```
 
 ---
 
