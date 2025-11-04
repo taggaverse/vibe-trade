@@ -422,4 +422,47 @@ addEntrypoint({
   },
 });
 
+// Collection status endpoint - monitor training data collection progress
+addEntrypoint({
+  key: "collection-status",
+  description:
+    "Get training data collection progress. Shows how many examples have been collected for C2C projector training.",
+  input: z.object({}),
+  price: "0", // Free endpoint
+  output: z.object({
+    total_examples: z.number(),
+    progress: z.object({
+      current: z.number(),
+      target: z.number(),
+      percentage: z.number(),
+      remaining: z.number(),
+    }),
+    symbols: z.record(z.string(), z.number()),
+    timeframes: z.record(z.string(), z.number()),
+    data_quality: z.object({
+      valid_examples: z.number(),
+      invalid_examples: z.number(),
+    }),
+    file_size_mb: z.number(),
+  }),
+  async handler() {
+    const stats = trainingCollector.getStats();
+    const progress = trainingCollector.getProgress(5000);
+
+    console.log("[vibe-trade] Collection status requested");
+
+    return {
+      output: {
+        total_examples: stats.total_examples,
+        progress,
+        symbols: stats.symbols,
+        timeframes: stats.timeframes,
+        data_quality: stats.data_quality,
+        file_size_mb: stats.file_size_mb,
+      },
+      model: "vibe-trade-v1",
+    };
+  },
+});
+
 export { app };
