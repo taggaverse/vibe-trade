@@ -8,7 +8,7 @@
 
 ## 🎯 What Vibe Trade Does
 
-Vibe Trade provides **institutional-grade trading analysis** through a simple API:
+Vibe Trade provides **institutional-grade trading analysis** through a simple x402 endpoint:
 
 ### Core Capabilities
 
