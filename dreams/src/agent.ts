@@ -9,6 +9,7 @@ import axios from "axios";
 import { withPaymentInterceptor, decodeXPaymentResponse } from "x402-axios";
 import { privateKeyToAccount } from "viem/accounts";
 import { C2CManager, C2CProjector, textToKVCache } from "./c2c-wrapper";
+import { TrainingDataCollector } from "./training-data-collector";
 
 /**
  * Vibe Trade - AI-Powered Trading Intelligence Nanoservice
@@ -103,6 +104,10 @@ c2cManager.registerProjector("taapi-to-router", taapiProjector);
 c2cManager.registerProjector("aixbt-to-router", aixbtProjector);
 
 console.log("[vibe-trade] C2C Manager initialized with projectors");
+
+// Initialize Training Data Collector
+const trainingCollector = new TrainingDataCollector("training_data.jsonl");
+console.log("[vibe-trade] Training Data Collector initialized");
 
 // Helper function to call TAAPI standard API (not x402)
 async function callTAAPIStandardAPI(
@@ -370,6 +375,32 @@ addEntrypoint({
     };
 
     const processingTime = Date.now() - startTime;
+
+    // Log training example for C2C projector training
+    if (technicalData && sentimentData) {
+      try {
+        trainingCollector.logExample({
+          timestamp: new Date().toISOString(),
+          request: {
+            symbol,
+            timeframe,
+            query,
+          },
+          taapi_output: technicalData,
+          aixbt_output: sentimentData,
+          llm_input: `Analyze ${symbol} ${timeframe}. Technical: ${JSON.stringify(technicalData)}. Sentiment: ${JSON.stringify(sentimentData)}`,
+          llm_output: recommendation,
+          metadata: {
+            latency_ms: processingTime,
+            cost_usd: 0.07,
+            sources_called: sourcesCalled,
+            accuracy_score: recommendation.confidence,
+          },
+        });
+      } catch (error) {
+        console.warn("[vibe-trade] Failed to log training example:", error);
+      }
+    }
 
     return {
       output: {
