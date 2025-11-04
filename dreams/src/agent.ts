@@ -10,7 +10,7 @@ import { withPaymentInterceptor, decodeXPaymentResponse } from "x402-axios";
 import { privateKeyToAccount } from "viem/accounts";
 import { C2CManager, C2CProjector, textToKVCache } from "./c2c-wrapper";
 import { TrainingDataCollector } from "./training-data-collector";
-import { getHyperliquidPerpData, analyzeFundingRate, getFundingSummary } from "./hyperliquid-perps";
+import { getHyperliquidPerpData, analyzeFundingRate, getFundingSummary, getX402PerpData } from "./hyperliquid-perps";
 
 /**
  * Vibe Trade - AI-Powered Trading Intelligence Nanoservice
@@ -510,6 +510,77 @@ addEntrypoint({
         data_quality: stats.data_quality,
         file_size_mb: stats.file_size_mb,
       },
+      model: "vibe-trade-v1",
+    };
+  },
+});
+
+// x402 Perpetuals Funding Endpoint - Query Hyperliquid funding rates for all or specific markets
+addEntrypoint({
+  key: "perps-funding",
+  description:
+    "Get perpetuals funding rates from Hyperliquid. Query all markets or specific symbols. Returns funding rate, time to next payment, open interest, and long/short skew.",
+  input: z.object({
+    markets: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "Optional array of market symbols (e.g., ['BTC', 'ETH', 'SOL']). If empty, returns all available markets."
+      ),
+    venue_ids: z
+      .array(z.string())
+      .optional()
+      .default(["hyperliquid"])
+      .describe("Perpetuals exchanges to query (currently supports 'hyperliquid')"),
+  }),
+  price: "10000", // $0.01 USDC in wei
+  output: z.object({
+    venue: z.string(),
+    markets: z.array(
+      z.object({
+        symbol: z.string(),
+        funding_rate: z.number(),
+        time_to_next: z.number(),
+        open_interest: z.number(),
+        skew: z.number(),
+        mark_price: z.number(),
+        oracle_price: z.number(),
+        premium: z.number(),
+        day_volume: z.number(),
+        timestamp: z.number(),
+      })
+    ),
+    timestamp: z.number(),
+    total_markets: z.number(),
+  }),
+  async handler(ctx) {
+    const markets = ctx.input.markets;
+    const venueIds = ctx.input.venue_ids || ["hyperliquid"];
+
+    console.log(
+      `[vibe-trade] Perps funding query: venues=${venueIds.join(",")}, markets=${markets ? markets.join(",") : "all"}`
+    );
+
+    // Currently only support Hyperliquid
+    if (!venueIds.includes("hyperliquid")) {
+      throw new Error(
+        "Only 'hyperliquid' venue is currently supported. Supported venues: hyperliquid"
+      );
+    }
+
+    // Query Hyperliquid
+    const result = await getX402PerpData(markets, 3000);
+
+    if (!result.success || !result.data) {
+      throw new Error("Failed to fetch perpetuals funding data from Hyperliquid");
+    }
+
+    console.log(
+      `[vibe-trade] Returned funding data for ${result.data.total_markets} markets`
+    );
+
+    return {
+      output: result.data,
       model: "vibe-trade-v1",
     };
   },
