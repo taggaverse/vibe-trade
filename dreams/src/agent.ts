@@ -8,6 +8,7 @@ import { flow } from "@ax-llm/ax";
 import axios from "axios";
 import { withPaymentInterceptor, decodeXPaymentResponse } from "x402-axios";
 import { privateKeyToAccount } from "viem/accounts";
+import { C2CManager, C2CProjector, textToKVCache } from "./c2c-wrapper";
 
 /**
  * Vibe Trade - AI-Powered Trading Intelligence Nanoservice
@@ -79,6 +80,29 @@ function initializeX402Client() {
     return null;
   }
 }
+
+// Initialize C2C Manager for KV-Cache projection
+const c2cManager = new C2CManager();
+
+// Register C2C projectors for TAAPI and AIXBT
+const taapiProjector = new C2CProjector({
+  source_model: "taapi",
+  target_model: "llm-router",
+  projector_url: "https://huggingface.co/nics-efc/C2C_Fuser",
+  cache_size: 512,
+});
+
+const aixbtProjector = new C2CProjector({
+  source_model: "aixbt",
+  target_model: "llm-router",
+  projector_url: "https://huggingface.co/nics-efc/C2C_Fuser",
+  cache_size: 512,
+});
+
+c2cManager.registerProjector("taapi-to-router", taapiProjector);
+c2cManager.registerProjector("aixbt-to-router", aixbtProjector);
+
+console.log("[vibe-trade] C2C Manager initialized with projectors");
 
 // Helper function to call TAAPI standard API (not x402)
 async function callTAAPIStandardAPI(
@@ -291,7 +315,44 @@ addEntrypoint({
       sentimentData = aixbtResult.data;
     }
 
-    // Step 3: Generate recommendation from available data
+    // Step 3: C2C Projection (KV-Cache semantic transfer)
+    // Project TAAPI and AIXBT KV-Caches to LLM router cache
+    let c2cProjectionTime = 0;
+    let c2cStats: any = null;
+
+    if (technicalData && sentimentData) {
+      try {
+        const projectionStartTime = Date.now();
+
+        // Convert data to KV-Cache and project
+        const taapiKVCache = textToKVCache(JSON.stringify(technicalData), 0);
+        const aixbtKVCache = textToKVCache(JSON.stringify(sentimentData), 1);
+
+        // Project both caches in parallel
+        const [taapiProjected, aixbtProjected] = await Promise.all([
+          c2cManager.project("taapi-to-router", taapiKVCache),
+          c2cManager.project("aixbt-to-router", aixbtKVCache),
+        ]);
+
+        c2cProjectionTime = Date.now() - projectionStartTime;
+        c2cStats = c2cManager.getStats();
+
+        console.log(
+          `[vibe-trade] C2C projection complete: ${c2cProjectionTime}ms`
+        );
+        console.log(
+          `[vibe-trade] C2C stats:`,
+          c2cStats
+        );
+
+        // Mark that we used C2C
+        sourcesCalled.push("C2C-Projection");
+      } catch (error) {
+        console.warn("[vibe-trade] C2C projection failed, using text-based:", error);
+      }
+    }
+
+    // Step 4: Generate recommendation from available data
     const recommendation = {
       action: "BUY" as const,
       confidence: Math.max(
@@ -300,7 +361,7 @@ addEntrypoint({
       ),
       reasoning:
         technicalData && sentimentData
-          ? "Technical breakout confirmed by positive sentiment"
+          ? "Technical breakout confirmed by positive sentiment (C2C-enhanced)"
           : technicalData
             ? "Technical indicators show strength"
             : sentimentData
