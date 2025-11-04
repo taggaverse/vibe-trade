@@ -10,6 +10,7 @@ import { withPaymentInterceptor, decodeXPaymentResponse } from "x402-axios";
 import { privateKeyToAccount } from "viem/accounts";
 import { C2CManager, C2CProjector, textToKVCache } from "./c2c-wrapper";
 import { TrainingDataCollector } from "./training-data-collector";
+import { getHyperliquidPerpData, analyzeFundingRate, getFundingSummary } from "./hyperliquid-perps";
 
 /**
  * Vibe Trade - AI-Powered Trading Intelligence Nanoservice
@@ -287,9 +288,10 @@ addEntrypoint({
     const sourcesCalled: string[] = [];
     let technicalData: any = null;
     let sentimentData: any = null;
+    let perpData: any = null;
 
-    // Parallel execution: TAAPI (standard API) + AIXBT (x402)
-    const [taapiResult, aixbtResult] = await Promise.all([
+    // Parallel execution: TAAPI (technical) + AIXBT (sentiment) + Hyperliquid (perpetuals)
+    const [taapiResult, aixbtResult, hyperliquidResult] = await Promise.all([
       routingDecision.call_taapi
         ? callTAAPIStandardAPI(symbol, timeframe)
         : Promise.resolve({ data: null, success: false }),
@@ -308,6 +310,8 @@ addEntrypoint({
             }
           )
         : Promise.resolve({ data: null, success: false }),
+      // Hyperliquid perpetuals funding data (always call, free API)
+      getHyperliquidPerpData(symbol, 2000),
     ]);
 
     // Track which sources succeeded
@@ -318,6 +322,10 @@ addEntrypoint({
     if (aixbtResult.success) {
       sourcesCalled.push("AIXBT");
       sentimentData = aixbtResult.data;
+    }
+    if (hyperliquidResult.success) {
+      sourcesCalled.push("Hyperliquid-Perps");
+      perpData = hyperliquidResult.data;
     }
 
     // Step 3: C2C Projection (KV-Cache semantic transfer)
@@ -358,20 +366,53 @@ addEntrypoint({
     }
 
     // Step 4: Generate recommendation from available data
+    // Analyze perpetuals funding if available
+    let fundingSignal = "NEUTRAL";
+    let fundingStrength = 0.5;
+    let fundingReasoning = "";
+
+    if (perpData) {
+      const fundingAnalysis = analyzeFundingRate(perpData);
+      fundingSignal = fundingAnalysis.signal;
+      fundingStrength = fundingAnalysis.strength;
+      fundingReasoning = fundingAnalysis.reasoning;
+      console.log(`[vibe-trade] Funding analysis: ${fundingReasoning}`);
+    }
+
+    // Combine signals: technical + sentiment + perpetuals funding
+    const technicalConfidence = technicalData?.strength ?? 0.5;
+    const sentimentConfidence = sentimentData?.confidence ?? 0.5;
+    const fundingConfidence = fundingStrength;
+
+    // Average confidence across all sources
+    const sourceCount = [technicalData, sentimentData, perpData].filter(
+      (d) => d
+    ).length;
+    const avgConfidence =
+      sourceCount > 0
+        ? (technicalConfidence + sentimentConfidence + fundingConfidence) /
+          sourceCount
+        : 0.5;
+
     const recommendation = {
       action: "BUY" as const,
-      confidence: Math.max(
-        technicalData?.strength ?? 0.5,
-        sentimentData?.confidence ?? 0.5
-      ),
+      confidence: avgConfidence,
       reasoning:
-        technicalData && sentimentData
-          ? "Technical breakout confirmed by positive sentiment (C2C-enhanced)"
-          : technicalData
-            ? "Technical indicators show strength"
-            : sentimentData
-              ? "Market sentiment is bullish"
-              : "Insufficient data for strong recommendation",
+        technicalData && sentimentData && perpData
+          ? `Technical breakout confirmed by positive sentiment and ${fundingSignal === "LONG" ? "bullish" : "bearish"} funding rate (${(perpData.funding * 100).toFixed(4)}%)`
+          : technicalData && sentimentData
+            ? "Technical breakout confirmed by positive sentiment (C2C-enhanced)"
+            : technicalData && perpData
+              ? `Technical strength with ${fundingSignal === "LONG" ? "bullish" : "bearish"} funding signal`
+              : sentimentData && perpData
+                ? `Bullish sentiment with ${fundingSignal === "LONG" ? "bullish" : "bearish"} funding signal`
+                : technicalData
+                  ? "Technical indicators show strength"
+                  : sentimentData
+                    ? "Market sentiment is bullish"
+                    : perpData
+                      ? `Perpetuals funding signal: ${fundingSignal}`
+                      : "Insufficient data for strong recommendation",
     };
 
     const processingTime = Date.now() - startTime;
@@ -388,7 +429,7 @@ addEntrypoint({
           },
           taapi_output: technicalData,
           aixbt_output: sentimentData,
-          llm_input: `Analyze ${symbol} ${timeframe}. Technical: ${JSON.stringify(technicalData)}. Sentiment: ${JSON.stringify(sentimentData)}`,
+          llm_input: `Analyze ${symbol} ${timeframe}. Technical: ${JSON.stringify(technicalData)}. Sentiment: ${JSON.stringify(sentimentData)}. Perpetuals: Funding ${(perpData?.funding * 100).toFixed(4)}%, OI ${perpData?.openInterest.toFixed(2)}.`,
           llm_output: recommendation,
           metadata: {
             latency_ms: processingTime,
@@ -408,6 +449,15 @@ addEntrypoint({
         analysis: {
           technical: technicalData,
           sentiment: sentimentData,
+          perpetuals: perpData ? {
+            funding_rate: perpData.funding,
+            open_interest: perpData.openInterest,
+            mark_price: perpData.markPrice,
+            oracle_price: perpData.oraclePrice,
+            premium: perpData.premium,
+            day_volume: perpData.dayVolume,
+            funding_summary: getFundingSummary(perpData),
+          } : undefined,
           recommendation,
         },
         portfolio: accountAddress ? { address: accountAddress, status: "pending" } : undefined,
