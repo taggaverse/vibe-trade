@@ -370,12 +370,22 @@ addEntrypoint({
     let fundingSignal = "NEUTRAL";
     let fundingStrength = 0.5;
     let fundingReasoning = "";
+    let fundingAction = "NEUTRAL";
+    let timeToNextFunding = 0;
+    let signalAgreement = 0.5; // How well signals agree
 
     if (perpData) {
       const fundingAnalysis = analyzeFundingRate(perpData);
       fundingSignal = fundingAnalysis.signal;
       fundingStrength = fundingAnalysis.strength;
       fundingReasoning = fundingAnalysis.reasoning;
+      fundingAction = fundingAnalysis.signal;
+      
+      // Calculate time to next funding (Hyperliquid pays hourly)
+      const now = Date.now();
+      const nextHour = Math.ceil(now / 3600000) * 3600000;
+      timeToNextFunding = Math.max(0, nextHour - now);
+      
       console.log(`[vibe-trade] Funding analysis: ${fundingReasoning}`);
     }
 
@@ -383,6 +393,22 @@ addEntrypoint({
     const technicalConfidence = technicalData?.strength ?? 0.5;
     const sentimentConfidence = sentimentData?.confidence ?? 0.5;
     const fundingConfidence = fundingStrength;
+
+    // Calculate signal agreement (how well they align)
+    if (technicalData && sentimentData && perpData) {
+      // All three signals present
+      const technicalBullish = technicalConfidence > 0.5;
+      const sentimentBullish = sentimentConfidence > 0.5;
+      const fundingBullish = fundingSignal === "LONG";
+      
+      const agreementCount = [technicalBullish, sentimentBullish, fundingBullish].filter(b => b).length;
+      signalAgreement = agreementCount / 3; // 0 = all bearish, 1 = all bullish
+    } else if (technicalData && sentimentData) {
+      // Two signals
+      const technicalBullish = technicalConfidence > 0.5;
+      const sentimentBullish = sentimentConfidence > 0.5;
+      signalAgreement = (technicalBullish === sentimentBullish) ? 1 : 0;
+    }
 
     // Average confidence across all sources
     const sourceCount = [technicalData, sentimentData, perpData].filter(
@@ -394,12 +420,19 @@ addEntrypoint({
           sourceCount
         : 0.5;
 
+    // Boost confidence if signals agree
+    const boostedConfidence = Math.min(1, avgConfidence * (0.7 + signalAgreement * 0.3));
+
     const recommendation = {
       action: "BUY" as const,
-      confidence: avgConfidence,
+      confidence: boostedConfidence,
+      funding_signal: fundingAction,
+      funding_strength: fundingStrength,
+      signal_agreement: signalAgreement,
+      time_to_next_funding_ms: timeToNextFunding,
       reasoning:
         technicalData && sentimentData && perpData
-          ? `Technical breakout confirmed by positive sentiment and ${fundingSignal === "LONG" ? "bullish" : "bearish"} funding rate (${(perpData.funding * 100).toFixed(4)}%)`
+          ? `Technical breakout confirmed by positive sentiment and ${fundingSignal === "LONG" ? "bullish" : "bearish"} funding rate (${(perpData.funding * 100).toFixed(4)}%). Signals ${signalAgreement > 0.66 ? "strongly" : signalAgreement > 0.33 ? "moderately" : "weakly"} aligned.`
           : technicalData && sentimentData
             ? "Technical breakout confirmed by positive sentiment (C2C-enhanced)"
             : technicalData && perpData
@@ -411,7 +444,7 @@ addEntrypoint({
                   : sentimentData
                     ? "Market sentiment is bullish"
                     : perpData
-                      ? `Perpetuals funding signal: ${fundingSignal}`
+                      ? `Perpetuals funding signal: ${fundingSignal}. Next funding in ${(timeToNextFunding / 60000).toFixed(0)} minutes.`
                       : "Insufficient data for strong recommendation",
     };
 
