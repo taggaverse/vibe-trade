@@ -238,8 +238,8 @@ const server = Bun.serve({
       });
     }
     
-    // All other requests (including POST to /) go to agent
-    return app.fetch(req);
+    // All other requests go to agent-kit (which handles all routing)
+    return await app.fetch(req);
   }
 });
 
