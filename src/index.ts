@@ -7,30 +7,41 @@ const server = Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
     
-    // Serve minimal HTML that loads x402-fetch FIRST to prevent collision
+    // For root path, get the agent-kit UI and inject x402-fetch FIRST
     if (url.pathname === "/" || url.pathname === "/index.html") {
-      return new Response(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Vibe Trade Agent</title>
-          <!-- Load x402-fetch FIRST (before Daydreams UI) to prevent ethereum provider collision -->
-          <script src="https://cdn.jsdelivr.net/npm/x402-fetch@latest"></script>
-        </head>
-        <body>
-          <div id="app"></div>
-          <script>
-            console.log('[vibe-trade] ✅ x402-fetch loaded');
-            console.log('[vibe-trade] ✅ window.ethereum:', window.ethereum ? 'defined' : 'undefined');
-            console.log('[vibe-trade] ✅ window.x402Fetch:', typeof window.x402Fetch);
-          </script>
-        </body>
-        </html>
-      `, {
-        headers: { "Content-Type": "text/html; charset=utf-8" }
-      });
+      try {
+        // Get the response from agent-kit UI
+        const response = await app.fetch(req);
+        
+        // If it's HTML, inject x402-fetch at the top
+        if (response.headers.get("content-type")?.includes("text/html")) {
+          let html = await response.text();
+          
+          // Inject x402-fetch script at the very beginning of <head>
+          // This ensures it loads BEFORE evmAsk.js
+          const x402Script = `<script src="https://cdn.jsdelivr.net/npm/x402-fetch@latest"></script>`;
+          
+          if (html.includes("<head>")) {
+            html = html.replace("<head>", `<head>\n    ${x402Script}`);
+          } else if (html.includes("<HEAD>")) {
+            html = html.replace("<HEAD>", `<HEAD>\n    ${x402Script}`);
+          } else {
+            // Fallback: add before first script tag
+            html = html.replace("<script", `${x402Script}\n    <script`);
+          }
+          
+          return new Response(html, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+          });
+        }
+        
+        return response;
+      } catch (error) {
+        console.error("[vibe-trade] Error serving UI:", error);
+        // Fall through to agent if error
+      }
     }
     
     // All other requests go to agent (endpoints, manifest, etc.)
