@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>vibe-trade</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 600px;
+      width: 100%;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 40px;
+      backdrop-filter: blur(10px);
+    }
+    
+    h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .subtitle {
+      color: #94a3b8;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #cbd5e1;
+    }
+    
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    input:focus, select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      background: rgba(30, 41, 59, 0.95);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    
+    button {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 10px;
+    }
+    
+    button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      display: none;
+    }
+    
+    .status.show {
+      display: block;
+    }
+    
+    .status.loading {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #93c5fd;
+    }
+    
+    .status.success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #86efac;
+    }
+    
+    .status.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+    
+    .response {
+      margin-top: 20px;
+      padding: 12px;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 6px;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      display: none;
+      font-family: 'Monaco', 'Courier New', monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    
+    .response.show {
+      display: block;
+    }
+    
+    .info {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      font-size: 12px;
+      color: #64748b;
+    }
+    
+    .info a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+    
+    .info a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>vibe-trade</h1>
+    <p class="subtitle">AI-powered trading intelligence with x402 micropayments</p>
+    
+    <form id="invokeForm">
+      <div class="form-group">
+        <label for="symbol">Trading Symbol</label>
+        <input type="text" id="symbol" name="symbol" value="BTC" placeholder="e.g., BTC, ETH" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="timeframe">Timeframe</label>
+        <select id="timeframe" name="timeframe">
+          <option value="1m">1 minute</option>
+          <option value="5m">5 minutes</option>
+          <option value="15m">15 minutes</option>
+          <option value="1h" selected>1 hour</option>
+          <option value="4h">4 hours</option>
+          <option value="1d">1 day</option>
+          <option value="1w">1 week</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="query">Query (optional)</label>
+        <input type="text" id="query" name="query" placeholder="e.g., Is this a good time to buy?">
+      </div>
+      
+      <button type="submit" id="invokeBtn">Invoke with x402 Payment</button>
+    </form>
+    
+    <div id="status" class="status"></div>
+    <div id="response" class="response"></div>
+    
+    <div class="info">
+      <p><strong>ℹ️ How it works:</strong></p>
+      <p>1. Connect MetaMask to Base network</p>
+      <p>2. Make sure you have USDC (~$0.10)</p>
+      <p>3. Click "Invoke" and approve payment</p>
+      <p>4. Agent analyzes and returns results</p>
+      <p style="margin-top: 10px;"><a href="/.well-known/agent.json" target="_blank">View Agent Manifest</a></p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('invokeForm');
+    const statusEl = document.getElementById('status');
+    const responseEl = document.getElementById('response');
+    const invokeBtn = document.getElementById('invokeBtn');
+    
+    function showStatus(message, type) {
+      statusEl.textContent = message;
+      statusEl.className = `status show ${type}`;
+    }
+    
+    function showResponse(data) {
+      responseEl.textContent = JSON.stringify(data, null, 2);
+      responseEl.classList.add('show');
+    }
+    
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const symbol = document.getElementById('symbol').value;
+      const timeframe = document.getElementById('timeframe').value;
+      const query = document.getElementById('query').value;
+      
+      invokeBtn.disabled = true;
+      showStatus('Preparing payment...', 'loading');
+      responseEl.classList.remove('show');
+      
+      try {
+        // Check if MetaMask is available
+        if (!window.ethereum) {
+          throw new Error('MetaMask not found. Please install MetaMask extension.');
+        }
+        
+        // Request accounts
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        if (!accounts || accounts.length === 0) {
+          throw new Error('No MetaMask account connected');
+        }
+        
+        showStatus('Sending request to agent...', 'loading');
+        
+        // Call the agent endpoint
+        const response = await fetch('/entrypoints/analyze/invoke', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            symbol,
+            timeframe,
+            query: query || undefined,
+          }),
+        });
+        
+        const data = await response.json();
+        
+        if (response.status === 402) {
+          // Payment required
+          showStatus('Payment required. This requires x402 payment integration.', 'error');
+          showResponse(data);
+        } else if (response.ok) {
+          showStatus('✓ Analysis complete!', 'success');
+          showResponse(data);
+        } else {
+          showStatus(`Error: ${data.error || 'Unknown error'}`, 'error');
+          showResponse(data);
+        }
+      } catch (error) {
+        showStatus(`Error: ${error.message}`, 'error');
+      } finally {
+        invokeBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
