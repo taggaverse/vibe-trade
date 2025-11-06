@@ -16,17 +16,28 @@ const server = Bun.serve({
           let html = await response.text();
           
           // Inject cleanup script at the VERY TOP of <head>
-          // This removes any conflicting ethereum provider before evmAsk.js loads
+          // This removes any conflicting ethereum provider and patches Object.defineProperty
           const cleanupScript = `<script>
 (function() {
-  // Remove any existing ethereum provider that might have configurable: false
-  // This prevents collision when evmAsk.js tries to inject its own
+  // Remove any existing ethereum provider
   try {
     delete window.ethereum;
     console.log('[vibe-trade] ✅ Cleared conflicting ethereum provider');
   } catch (e) {
     console.warn('[vibe-trade] Could not clear ethereum:', e);
   }
+  
+  // Patch Object.defineProperty to allow ethereum redefinition
+  const originalDefineProperty = Object.defineProperty;
+  Object.defineProperty = function(obj, prop, descriptor) {
+    // If trying to define 'ethereum' on window, force configurable: true
+    if (obj === window && prop === 'ethereum') {
+      descriptor = descriptor || {};
+      descriptor.configurable = true;
+    }
+    return originalDefineProperty.call(this, obj, prop, descriptor);
+  };
+  console.log('[vibe-trade] ✅ Patched Object.defineProperty for ethereum');
 })();
 </script>`;
           
