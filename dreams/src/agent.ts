@@ -26,14 +26,9 @@ import { getHyperliquidPerpData, analyzeFundingRate, getFundingSummary, getX402P
  * Returns whatever data arrives first (fail-fast approach).
  *
  * Required environment variables:
- *   - BASE_PRIVATE_KEY  (wallet for x402 payments on Base)
- *   - BASE_RPC_URL      (Base RPC endpoint for transactions)
- *   - OPENAI_API_KEY    (for LLM routing decisions)
+ *   - PRIVATE_KEY      (wallet for x402 payments)
+ *   - OPENAI_API_KEY   (for LLM routing decisions)
  */
-
-// Base network configuration
-const BASE_RPC_URL = process.env.BASE_RPC_URL ?? "https://mainnet.base.org";
-const BASE_PRIVATE_KEY = process.env.BASE_PRIVATE_KEY;
 
 const configOverrides: AgentKitConfig = {
   payments: {
@@ -67,26 +62,21 @@ if (!axClient.isConfigured()) {
 }
 
 // Initialize x402 clients for calling other endpoints
+const WALLET_PRIVATE_KEY = process.env.PRIVATE_KEY;
 let x402Client: any = null;
 
 function initializeX402Client() {
   if (x402Client) return x402Client;
   
-  if (!BASE_PRIVATE_KEY) {
-    console.warn("[vibe-trade] BASE_PRIVATE_KEY not set - x402 payments will fail");
-    console.warn("[vibe-trade] Add BASE_PRIVATE_KEY to .env to enable x402 payments");
+  if (!WALLET_PRIVATE_KEY) {
+    console.warn("[vibe-trade] PRIVATE_KEY not set - x402 calls will fail");
     return null;
   }
 
   try {
-    const account = privateKeyToAccount(BASE_PRIVATE_KEY as `0x${string}`);
+    const account = privateKeyToAccount(WALLET_PRIVATE_KEY as `0x${string}`);
     x402Client = withPaymentInterceptor(axios.create(), account);
-    
     console.log("[vibe-trade] x402 client initialized");
-    console.log(`[vibe-trade] Wallet address: ${account.address}`);
-    console.log(`[vibe-trade] Base RPC: ${BASE_RPC_URL}`);
-    console.log("[vibe-trade] Ready to make x402 payments for services");
-    
     return x402Client;
   } catch (error) {
     console.error("[vibe-trade] Failed to initialize x402 client:", error);
