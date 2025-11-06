@@ -272,10 +272,9 @@ addEntrypoint({
       throw new Error("Symbol cannot be empty.");
     }
 
-    // Calculate budget: 90% of received payment
-    const entrypointPrice = BigInt("100000"); // $0.10 in wei
-    const maxSpend = (entrypointPrice * BigInt(90)) / BigInt(100);
-    const budgetPerSource = maxSpend / BigInt(3); // Divide among 3 sources
+    // Note: x402 endpoints (AIXBT, Daydreams Router) request their own payment amounts
+    // We don't pre-calculate budgets - we pay what each service requests
+    // TAAPI is free (standard API), Hyperliquid is free (public API)
 
     // Step 1: Routing decision (LLM decides which sources to call)
     let routingDecision = { call_taapi: true, call_aixbt: true };
@@ -502,7 +501,7 @@ addEntrypoint({
         portfolio: accountAddress ? { address: accountAddress, status: "pending" } : undefined,
         metadata: {
           sources_called: sourcesCalled,
-          total_cost: maxSpend.toString(),
+          total_cost: "0.07",  // Approximate cost (TAAPI free, AIXBT ~0.05, Hyperliquid free)
           processing_time_ms: processingTime,
         },
       },
