@@ -152,7 +152,7 @@ const minimalUI = `<!DOCTYPE html>
         console.log('Agent manifest:', manifest);
         
         // Find analyze endpoint URL
-        const analyzeEndpoint = manifest.endpoints?.find((e: any) => e.key === 'analyze');
+        const analyzeEndpoint = manifest.endpoints?.find(e => e.key === 'analyze');
         if (!analyzeEndpoint) {
           throw new Error('analyze endpoint not found in manifest');
         }
