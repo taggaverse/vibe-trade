@@ -15,40 +15,28 @@ const server = Bun.serve({
         if (response.headers.get("content-type")?.includes("text/html")) {
           let html = await response.text();
           
-          // Inject cleanup script at the VERY TOP of <head>
-          // This removes any conflicting ethereum provider and patches Object.defineProperty
-          const cleanupScript = `<script>
-(function() {
-  // Remove any existing ethereum provider
-  try {
-    delete window.ethereum;
-    console.log('[vibe-trade] ✅ Cleared conflicting ethereum provider');
-  } catch (e) {
-    console.warn('[vibe-trade] Could not clear ethereum:', e);
-  }
-  
-  // Patch Object.defineProperty to allow ethereum redefinition
-  const originalDefineProperty = Object.defineProperty;
-  Object.defineProperty = function(obj, prop, descriptor) {
-    // If trying to define 'ethereum' on window, force configurable: true
-    if (obj === window && prop === 'ethereum') {
-      descriptor = descriptor || {};
-      descriptor.configurable = true;
-    }
-    return originalDefineProperty.call(this, obj, prop, descriptor);
-  };
-  console.log('[vibe-trade] ✅ Patched Object.defineProperty for ethereum');
-})();
+          // Remove evmAsk.js script tags to prevent collision
+          html = html.replace(/<script[^>]*evmAsk[^>]*><\/script>/gi, "");
+          
+          // Inject x402-fetch and disable evmAsk.js
+          const x402Script = `<script>
+// Disable evmAsk.js by preventing its initialization
+window.disableEvmAsk = true;
+console.log('[vibe-trade] ✅ Disabled evmAsk.js, using x402-fetch for payments');
+</script>
+<script src="https://cdn.jsdelivr.net/npm/x402-fetch@latest"></script>
+<script>
+console.log('[vibe-trade] ✅ x402-fetch loaded for frontend payments');
 </script>`;
           
           // Inject at the very beginning of <head>
           if (html.includes("<head>")) {
-            html = html.replace("<head>", `<head>${cleanupScript}`);
+            html = html.replace("<head>", `<head>${x402Script}`);
           } else if (html.includes("<HEAD>")) {
-            html = html.replace("<HEAD>", `<HEAD>${cleanupScript}`);
+            html = html.replace("<HEAD>", `<HEAD>${x402Script}`);
           } else {
             // Fallback: add before first script tag
-            html = html.replace("<script", `${cleanupScript}<script`);
+            html = html.replace("<script", `${x402Script}<script`);
           }
           
           return new Response(html, {
