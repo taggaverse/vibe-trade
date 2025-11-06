@@ -159,8 +159,10 @@ const minimalUI = `<!DOCTYPE html>
         
         // Build endpoint URL - use current page's protocol to avoid mixed content
         const manifestUrl = new URL(manifest.url || window.location.origin);
-        manifestUrl.protocol = window.location.protocol; // Use HTTPS if page is HTTPS
-        const endpointUrl = manifestUrl.toString().replace(/\/$/, '') + '/analyze';
+        manifestUrl.protocol = window.location.protocol;
+        let baseUrl = manifestUrl.toString();
+        if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+        const endpointUrl = baseUrl + '/analyze';
         console.log('Calling endpoint:', endpointUrl);
         
         // Step 2: Send request to the actual endpoint
