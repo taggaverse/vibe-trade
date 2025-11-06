@@ -1,5 +1,9 @@
 # Railway Deployment - Quick Start Card
 
+## ✅ Fixed: Repository Restructured for Railway
+
+The agent code has been moved to the root directory. Railway will now correctly detect and build the Bun project.
+
 ## 🚀 Deploy in 5 Steps
 
 ### Step 1: Go to Railway
