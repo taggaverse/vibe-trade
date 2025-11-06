@@ -11,6 +11,7 @@
 docs/
 README.md
 REPO_STRUCTURE.md
+DREAMS_README.md
 
 # Scripts
 scripts/
@@ -18,7 +19,6 @@ scripts/
 
 # Development
 .env
-.env.example
 .vscode
 .idea
 *.log
@@ -46,3 +46,6 @@ __tests__/
 .editorconfig
 .prettierrc
 .eslintrc
+
+# Old subdirectory (no longer needed)
+dreams/
