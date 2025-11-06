@@ -229,7 +229,10 @@
       }
     }, true);
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/x402-fetch@latest/dist/index.js"></script>
+  <script type="module">
+    import * as x402 from 'https://cdn.jsdelivr.net/npm/x402-fetch@0.7.0/dist/esm/index.mjs';
+    window.x402 = x402;
+  </script>
   <script>
     const form = document.getElementById('invokeForm');
     const statusEl = document.getElementById('status');
