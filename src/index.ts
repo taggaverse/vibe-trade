@@ -229,15 +229,16 @@ const server = Bun.serve({
   port,
   async fetch(req) {
     const url = new URL(req.url);
+    const method = req.method;
     
-    // Serve minimal UI at root
-    if (url.pathname === "/" || url.pathname === "/index.html") {
+    // Serve minimal UI at root GET only
+    if ((url.pathname === "/" || url.pathname === "/index.html") && method === "GET") {
       return new Response(minimalUI, {
         headers: { "Content-Type": "text/html; charset=utf-8" }
       });
     }
     
-    // All other requests go to agent
+    // All other requests (including POST to /) go to agent
     return app.fetch(req);
   }
 });
