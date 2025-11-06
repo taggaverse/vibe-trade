@@ -157,9 +157,10 @@ const minimalUI = `<!DOCTYPE html>
           throw new Error('analyze entrypoint not found in manifest');
         }
         
-        // Build endpoint URL from manifest base URL
-        const baseUrl = manifest.url || window.location.origin;
-        const endpointUrl = baseUrl + '/analyze';
+        // Build endpoint URL - use current page's protocol to avoid mixed content
+        const manifestUrl = new URL(manifest.url || window.location.origin);
+        manifestUrl.protocol = window.location.protocol; // Use HTTPS if page is HTTPS
+        const endpointUrl = manifestUrl.toString().replace(/\/$/, '') + '/analyze';
         console.log('Calling endpoint:', endpointUrl);
         
         // Step 2: Send request to the actual endpoint
