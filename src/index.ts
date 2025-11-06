@@ -151,13 +151,15 @@ const minimalUI = `<!DOCTYPE html>
         const manifest = await manifestResponse.json();
         console.log('Agent manifest:', manifest);
         
-        // Find analyze endpoint URL
-        const analyzeEndpoint = manifest.endpoints?.find(e => e.key === 'analyze');
-        if (!analyzeEndpoint) {
-          throw new Error('analyze endpoint not found in manifest');
+        // Find analyze entrypoint
+        const analyzeEntrypoint = manifest.entrypoints?.analyze;
+        if (!analyzeEntrypoint) {
+          throw new Error('analyze entrypoint not found in manifest');
         }
         
-        const endpointUrl = new URL(analyzeEndpoint.url, window.location.origin).toString();
+        // Build endpoint URL from manifest base URL
+        const baseUrl = manifest.url || window.location.origin;
+        const endpointUrl = baseUrl + '/analyze';
         console.log('Calling endpoint:', endpointUrl);
         
         // Step 2: Send request to the actual endpoint
