@@ -133,6 +133,18 @@
     </div>
   </div>
 
+  <script>
+    // Pre-define window.ethereum to prevent evmAsk.js collision
+    // This must run BEFORE any other scripts that might try to inject ethereum
+    if (!window.ethereum) {
+      Object.defineProperty(window, 'ethereum', {
+        value: {},
+        writable: true,
+        configurable: true
+      });
+    }
+  </script>
+  
   <script src="https://cdn.jsdelivr.net/npm/x402-fetch@latest/dist/index.js"></script>
   <script>
     async function invokeAgent() {
