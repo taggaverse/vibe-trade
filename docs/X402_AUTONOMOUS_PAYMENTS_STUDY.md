@@ -131,11 +131,10 @@ Client Request to /analyze
 Agent routing decision (TAAPI? AIXBT? Both?)
    ↓
 Parallel calls to data sources:
-   ├─→ TAAPI (x402 endpoint)
-   │   └─→ x402Client.get() 
-   │       ├─→ Initial request (402 response)
-   │       ├─→ Sign payment with BASE_PRIVATE_KEY
-   │       ├─→ Retry with X-PAYMENT header
+   ├─→ TAAPI (standard REST API with API key)
+   │   └─→ axios.get()
+   │       ├─→ No x402 payment needed
+   │       ├─→ Uses TAAPI_API_KEY from environment
    │       └─→ Receive technical data
    │
    ├─→ AIXBT (x402 endpoint)
@@ -144,6 +143,13 @@ Parallel calls to data sources:
    │       ├─→ Sign payment with BASE_PRIVATE_KEY
    │       ├─→ Retry with X-PAYMENT header
    │       └─→ Receive sentiment data
+   │
+   ├─→ Daydreams Router (x402 endpoint - optional)
+   │   └─→ x402Client.post()
+   │       ├─→ Initial request (402 response)
+   │       ├─→ Sign payment with BASE_PRIVATE_KEY
+   │       ├─→ Retry with X-PAYMENT header
+   │       └─→ Receive routing decision
    │
    └─→ Hyperliquid (free API)
        └─→ Direct call (no payment needed)
@@ -156,13 +162,31 @@ Return analysis to client
 ### Payment Details
 
 **For `/analyze` endpoint:**
-- TAAPI call: ~$0.02 USDC
-- AIXBT call: ~$0.02 USDC
-- Total: ~$0.04 USDC per analysis
+- TAAPI call: Free (uses API key)
+- AIXBT call: ~$0.02 USDC (x402 payment)
+- Daydreams Router: ~$0.01 USDC (x402 payment, optional)
+- Hyperliquid: Free
+- **Total:** ~$0.02-0.03 USDC per analysis (only AIXBT required)
 
 **Wallet requirements:**
 - Minimum balance: $0.10 USDC (for 2-3 analyses)
 - Recommended: $1-5 USDC (for 25-125 analyses)
+
+---
+
+## 📈 Payment Economics
+
+**Per Analysis Request:**
+- TAAPI call: Free (uses API key)
+- AIXBT call: ~$0.02 USDC (x402 payment)
+- Daydreams Router: ~$0.01 USDC (x402 payment, optional)
+- Hyperliquid: Free
+- **Total:** ~$0.02-0.03 USDC per analysis
+
+**Wallet Funding:**
+- Minimum: $0.10 (for 3-5 analyses)
+- Recommended: $1-5 (for 33-250 analyses)
+- Safe: $10+ (for 300+ analyses)
 
 ---
 
@@ -229,8 +253,21 @@ const [taapiResult, aixbtResult] = await Promise.all([
 ]);
 ```
 
-### Step 4: x402 Payment Happens Automatically
+### Step 4: x402 Payments Happen for AIXBT and Daydreams Router
 
+**For TAAPI (no x402 payment):**
+```
+callTAAPIStandardAPI("BTC", "1h")
+   ↓
+axios.get(https://api.taapi.io/ta, {
+  secret: TAAPI_API_KEY,
+  ...
+})
+   ↓
+Server returns 200 OK with technical data
+```
+
+**For AIXBT (x402 payment):**
 ```
 callX402Endpoint("AIXBT", endpoint, payload)
    ↓
@@ -252,7 +289,7 @@ Facilitator verifies payment
    ↓
 Blockchain submits transaction
    ↓
-Server returns 200 OK with data
+Server returns 200 OK with sentiment data
 ```
 
 ### Step 5: Agent Returns Response

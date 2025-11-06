@@ -282,9 +282,9 @@ Client Request
 ┌─────────────────────────────────────────┐
 │ Parallel Data Fetching (3 sources)      │
 ├─────────────────────────────────────────┤
-│ TAAPI (technical)     → 250ms           │
-│ AIXBT (sentiment)     → 280ms           │
-│ Hyperliquid (perps)   → 200ms           │
+│ TAAPI (standard API)  → 250ms (free)    │
+│ AIXBT (x402)          → 280ms ($0.02)   │
+│ Hyperliquid (free)    → 200ms (free)    │
 └─────────────────────────────────────────┘
     ↓ (all complete in ~280ms)
 ┌─────────────────────────────────────────┐
