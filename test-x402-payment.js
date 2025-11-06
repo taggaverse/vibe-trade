@@ -56,7 +56,10 @@ async function testPayment() {
     // Create axios client with x402 payment interceptor
     console.log('🔐 Setting up x402 payment interceptor...');
     const client = axios.create();
-    const x402Client = withPaymentInterceptor(client, account);
+    const x402Client = withPaymentInterceptor(client, account, undefined, {
+      network: NETWORK,
+      facilitatorUrl: FACILITATOR_URL,
+    });
 
     console.log('📤 Sending request to agent...');
     console.log(`   URL: ${ENDPOINT}`);
