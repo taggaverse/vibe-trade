@@ -4,6 +4,40 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vibe Trade - x402 Agent</title>
+  <script>
+    // CRITICAL: Block evmAsk.js from redefining window.ethereum
+    // This must run FIRST, before any content scripts
+    (function() {
+      // Create a non-configurable ethereum object that evmAsk cannot override
+      if (!window.ethereum) {
+        try {
+          Object.defineProperty(window, 'ethereum', {
+            value: {
+              isMetaMask: true,
+              request: async (args) => {
+                if (window.ethereum._request) {
+                  return window.ethereum._request(args);
+                }
+                throw new Error('MetaMask not ready');
+              }
+            },
+            writable: false,
+            configurable: false
+          });
+        } catch (e) {
+          console.warn('Could not define ethereum:', e);
+        }
+      }
+      
+      // Also prevent evmAsk from being loaded
+      window.addEventListener('beforescriptexecute', (e) => {
+        if (e.target.src && e.target.src.includes('evmAsk')) {
+          e.preventDefault();
+          console.log('Blocked evmAsk.js');
+        }
+      }, true);
+    })();
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -133,18 +167,6 @@
     </div>
   </div>
 
-  <script>
-    // Pre-define window.ethereum to prevent evmAsk.js collision
-    // This must run BEFORE any other scripts that might try to inject ethereum
-    if (!window.ethereum) {
-      Object.defineProperty(window, 'ethereum', {
-        value: {},
-        writable: true,
-        configurable: true
-      });
-    }
-  </script>
-  
   <script src="https://cdn.jsdelivr.net/npm/x402-fetch@latest/dist/index.js"></script>
   <script>
     async function invokeAgent() {
