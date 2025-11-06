@@ -8,7 +8,6 @@ const minimalUI = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vibe Trade - x402 Agent</title>
-  <script src="https://unpkg.com/x402-fetch@latest/dist/index.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -144,9 +143,8 @@ const minimalUI = `<!DOCTYPE html>
       try {
         console.log('Invoking agent:', { symbol, timeframe });
         
-        // Call the analyze endpoint with x402-fetch
-        // x402-fetch will handle 402 responses and prompt for payment
-        const analyzeResponse = await x402Fetch(window.location.origin + '/', {
+        // Step 1: Send request without payment
+        let response = await fetch(window.location.origin + '/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -155,11 +153,28 @@ const minimalUI = `<!DOCTYPE html>
           })
         });
         
-        if (!analyzeResponse.ok) {
-          throw new Error(\`HTTP \${analyzeResponse.status}: \${analyzeResponse.statusText}\`);
+        // Step 2: If 402, we need to pay
+        if (response.status === 402) {
+          statusDiv.textContent = '💳 Payment required - check MetaMask...';
+          
+          // Get payment requirements
+          const paymentRequired = response.headers.get('x-payment-required');
+          if (!paymentRequired) {
+            throw new Error('Server did not provide payment requirements');
+          }
+          
+          const paymentReq = JSON.parse(paymentRequired);
+          console.log('Payment required:', paymentReq);
+          
+          // For now, show error with instructions
+          throw new Error(\`Agent requires payment: \${paymentReq.amount} wei. x402-fetch library not loading. Please use a different client or wait for fix.\`);
         }
         
-        const data = await analyzeResponse.json();
+        if (!response.ok) {
+          throw new Error(\`HTTP \${response.status}: \${response.statusText}\`);
+        }
+        
+        const data = await response.json();
         statusDiv.className = 'success';
         statusDiv.textContent = '✅ Payment successful! Agent processed request.';
         resultDiv.textContent = JSON.stringify(data, null, 2);
@@ -167,7 +182,7 @@ const minimalUI = `<!DOCTYPE html>
         console.error('Error:', error);
         statusDiv.className = 'error';
         statusDiv.textContent = \`❌ Error: \${error.message}\`;
-        resultDiv.textContent = \`Error: \${error.message}\\n\\nMake sure:\\n1. MetaMask is installed\\n2. Connected to Base network\\n3. Have USDC balance\\n4. x402-fetch loaded: \${typeof window.x402Fetch}\`;
+        resultDiv.textContent = \`Error: \${error.message}\\n\\nNote: x402 payment library not loading from CDN.\\n\\nAlternative: Use cURL with x402 payment header:\\n\\ncurl -X POST https://web-production-5dad2.up.railway.app/ \\\\\\n  -H "Content-Type: application/json" \\\\\\n  -H "x-payment: <payment-signature>" \\\\\\n  -d '{"entrypoint":"analyze","input":{"symbol":"BTC","timeframe":"1h"}}'\`;
       } finally {
         btn.disabled = false;
       }
