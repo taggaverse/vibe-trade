@@ -1,0 +1,48 @@
+# Railway Build Ignore File
+# Files to exclude from Railway builds to reduce build time
+
+# Git
+.git
+.gitignore
+.github
+
+# Documentation
+*.md
+docs/
+README.md
+REPO_STRUCTURE.md
+
+# Scripts
+scripts/
+*.sh
+
+# Development
+.env
+.env.example
+.vscode
+.idea
+*.log
+
+# Node/Bun
+node_modules
+.bun
+
+# Build artifacts
+dist/
+build/
+*.tgz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+*.test.ts
+*.spec.ts
+test/
+__tests__/
+
+# Misc
+.editorconfig
+.prettierrc
+.eslintrc

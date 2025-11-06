@@ -4,8 +4,10 @@
     "builder": "nixpacks"
   },
   "deploy": {
-    "startCommand": "npm start",
+    "startCommand": "bun run src/index.ts",
     "restartPolicyType": "on_failure",
-    "restartPolicyMaxRetries": 5
+    "restartPolicyMaxRetries": 5,
+    "healthcheckPath": "/.well-known/agent.json",
+    "healthcheckTimeout": 30
   }
 }
