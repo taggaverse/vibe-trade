@@ -145,24 +145,7 @@ const minimalUI = `<!DOCTYPE html>
         console.log('Invoking agent:', { symbol, timeframe });
         
         // Call the analyze endpoint with x402-fetch
-        const response = await x402Fetch(window.location.origin + '/.well-known/agent.json', {
-          method: 'GET'
-        });
-        
-        if (!response.ok) {
-          throw new Error(\`Failed to get agent manifest: \${response.status}\`);
-        }
-        
-        const manifest = await response.json();
-        console.log('Agent manifest:', manifest);
-        
-        // Find the analyze endpoint
-        const analyzeEndpoint = manifest.endpoints?.find(e => e.key === 'analyze');
-        if (!analyzeEndpoint) {
-          throw new Error('analyze endpoint not found in manifest');
-        }
-        
-        // Now call the actual analyze endpoint with payment
+        // x402-fetch will handle 402 responses and prompt for payment
         const analyzeResponse = await x402Fetch(window.location.origin + '/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
