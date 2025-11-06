@@ -2,12 +2,12 @@ import { z } from "zod";
 import {
   createAgentApp,
   createAxLLMClient,
+  createX402Fetch,
+  accountFromPrivateKey,
   AgentKitConfig,
 } from "@lucid-dreams/agent-kit";
 import { flow } from "@ax-llm/ax";
 import axios from "axios";
-import { withPaymentInterceptor, decodeXPaymentResponse } from "x402-axios";
-import { privateKeyToAccount } from "viem/accounts";
 import { C2CManager, C2CProjector, textToKVCache } from "./c2c-wrapper";
 import { TrainingDataCollector } from "./training-data-collector";
 import { getHyperliquidPerpData, analyzeFundingRate, getFundingSummary, getX402PerpData } from "./hyperliquid-perps";
@@ -66,12 +66,12 @@ if (!axClient.isConfigured()) {
   );
 }
 
-// Initialize x402 clients for calling other endpoints
+// Initialize x402 fetch for calling other endpoints with payments
 const WALLET_PRIVATE_KEY = process.env.PRIVATE_KEY;
-let x402Client: any = null;
+let x402Fetch: ReturnType<typeof createX402Fetch> | null = null;
 
-function initializeX402Client() {
-  if (x402Client) return x402Client;
+function initializeX402Fetch() {
+  if (x402Fetch) return x402Fetch;
   
   if (!WALLET_PRIVATE_KEY) {
     console.warn("[vibe-trade] PRIVATE_KEY not set - x402 calls will fail");
@@ -79,12 +79,12 @@ function initializeX402Client() {
   }
 
   try {
-    const account = privateKeyToAccount(WALLET_PRIVATE_KEY as `0x${string}`);
-    x402Client = withPaymentInterceptor(axios.create(), account);
-    console.log("[vibe-trade] x402 client initialized");
-    return x402Client;
+    const account = accountFromPrivateKey(WALLET_PRIVATE_KEY as `0x${string}`);
+    x402Fetch = createX402Fetch({ account });
+    console.log("[vibe-trade] x402 fetch initialized");
+    return x402Fetch;
   } catch (error) {
-    console.error("[vibe-trade] Failed to initialize x402 client:", error);
+    console.error("[vibe-trade] Failed to initialize x402 fetch:", error);
     return null;
   }
 }
@@ -178,29 +178,34 @@ async function callX402Endpoint(
   payload: any,
   timeoutMs: number = 2000
 ): Promise<{ data: any; success: boolean }> {
-  const client = initializeX402Client();
-  if (!client) {
-    console.warn(`[vibe-trade] ${name} client not initialized`);
+  const fetch = initializeX402Fetch();
+  if (!fetch) {
+    console.warn(`[vibe-trade] ${name} fetch not initialized`);
     return { data: null, success: false };
   }
 
   try {
     const result = await Promise.race([
-      client.post(endpoint, payload),
+      fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error("Timeout")), timeoutMs)
       ),
-    ]);
+    ]) as Response;
 
-    // Extract payment response
-    const paymentResponse = decodeXPaymentResponse(
-      result.headers["x-payment-response"]
-    );
-    console.log(
-      `[vibe-trade] ${name} payment confirmed: ${paymentResponse.transaction_hash}`
-    );
+    // Check for payment response header
+    const paymentHeader = result.headers.get("x-payment-response");
+    if (paymentHeader) {
+      console.log(
+        `[vibe-trade] ${name} payment confirmed: ${paymentHeader}`
+      );
+    }
 
-    return { data: result.data, success: true };
+    const data = await result.json();
+    return { data, success: true };
   } catch (error) {
     console.warn(`[vibe-trade] ${name} call failed:`, error);
     return { data: null, success: false };
