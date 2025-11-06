@@ -213,6 +213,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/x402-fetch@latest/dist/index.js"></script>
   <script>
     const form = document.getElementById('invokeForm');
     const statusEl = document.getElementById('status');
@@ -252,10 +253,29 @@
           throw new Error('No MetaMask account connected');
         }
         
-        showStatus('Sending request to agent...', 'loading');
+        showStatus('Initializing x402 payment...', 'loading');
         
-        // Call the agent endpoint
-        const response = await fetch('/entrypoints/analyze/invoke', {
+        // Wait for x402-fetch to be available
+        let maxWait = 50; // 5 seconds
+        while (!window.x402 && maxWait > 0) {
+          await new Promise(r => setTimeout(r, 100));
+          maxWait--;
+        }
+        
+        if (!window.x402) {
+          throw new Error('x402-fetch failed to load. Please refresh and try again.');
+        }
+        
+        // Create x402-enabled fetch
+        const x402Fetch = window.x402.createX402Fetch({
+          account: window.ethereum,
+          fetchImpl: fetch,
+        });
+        
+        showStatus('Sending request with x402 payment...', 'loading');
+        
+        // Call the agent endpoint with x402 payment handling
+        const response = await x402Fetch('/entrypoints/analyze/invoke', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -269,11 +289,7 @@
         
         const data = await response.json();
         
-        if (response.status === 402) {
-          // Payment required
-          showStatus('Payment required. This requires x402 payment integration.', 'error');
-          showResponse(data);
-        } else if (response.ok) {
+        if (response.ok) {
           showStatus('✓ Analysis complete!', 'success');
           showResponse(data);
         } else {
@@ -282,6 +298,7 @@
         }
       } catch (error) {
         showStatus(`Error: ${error.message}`, 'error');
+        console.error('Full error:', error);
       } finally {
         invokeBtn.disabled = false;
       }
