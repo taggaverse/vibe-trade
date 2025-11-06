@@ -59,7 +59,10 @@ const axClient = createAxLLMClient({
 
 if (!axClient.isConfigured()) {
   console.warn(
-    "[vibe-trade] OpenAI API not configured — routing will use fallback logic."
+    "[vibe-trade] OpenAI API not configured — routing will use Daydreams router with x402 payments"
+  );
+  console.warn(
+    "[vibe-trade] Set OPENAI_API_KEY to use OpenAI directly, or ensure PRIVATE_KEY is set for x402 payments"
   );
 }
 
