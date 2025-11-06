@@ -7,7 +7,7 @@ const server = Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
     
-    // For root path, inject ethereum provider guard to prevent collision
+    // For root path, use Daydreams UI but clear conflicting ethereum provider
     if (url.pathname === "/" || url.pathname === "/index.html") {
       try {
         const response = await app.fetch(req);
@@ -15,39 +15,29 @@ const server = Bun.serve({
         if (response.headers.get("content-type")?.includes("text/html")) {
           let html = await response.text();
           
-          // Remove x402-fetch - evmAsk.js handles frontend payments
-          html = html.replace(/<script[^>]*x402-fetch[^>]*><\/script>/gi, "");
-          html = html.replace(/<script[^>]*src="https:\/\/cdn\.jsdelivr\.net\/npm\/x402-fetch[^>]*><\/script>/gi, "");
-          
-          // Inject ethereum provider guard BEFORE any scripts load
-          // This allows evmAsk.js to redefine it without collision
-          const guardScript = `<script>
+          // Inject cleanup script at the VERY TOP of <head>
+          // This removes any conflicting ethereum provider before evmAsk.js loads
+          const cleanupScript = `<script>
 (function() {
-  // Pre-define window.ethereum with configurable: true
-  // This allows evmAsk.js to redefine it without collision
-  if (!window.ethereum) {
-    try {
-      Object.defineProperty(window, 'ethereum', {
-        value: null,
-        writable: true,
-        configurable: true
-      });
-      console.log('[vibe-trade] ✅ Ethereum provider guard installed');
-    } catch (e) {
-      console.warn('[vibe-trade] Could not install ethereum guard:', e);
-    }
+  // Remove any existing ethereum provider that might have configurable: false
+  // This prevents collision when evmAsk.js tries to inject its own
+  try {
+    delete window.ethereum;
+    console.log('[vibe-trade] ✅ Cleared conflicting ethereum provider');
+  } catch (e) {
+    console.warn('[vibe-trade] Could not clear ethereum:', e);
   }
 })();
 </script>`;
           
           // Inject at the very beginning of <head>
           if (html.includes("<head>")) {
-            html = html.replace("<head>", `<head>${guardScript}`);
+            html = html.replace("<head>", `<head>${cleanupScript}`);
           } else if (html.includes("<HEAD>")) {
-            html = html.replace("<HEAD>", `<HEAD>${guardScript}`);
+            html = html.replace("<HEAD>", `<HEAD>${cleanupScript}`);
           } else {
             // Fallback: add before first script tag
-            html = html.replace("<script", `${guardScript}<script`);
+            html = html.replace("<script", `${cleanupScript}<script`);
           }
           
           return new Response(html, {
