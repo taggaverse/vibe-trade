@@ -143,13 +143,30 @@ const minimalUI = `<!DOCTYPE html>
       try {
         console.log('Invoking agent:', { symbol, timeframe });
         
-        // Step 1: Send request without payment
-        let response = await fetch(window.location.origin + '/', {
+        // Step 1: Get agent manifest to find the analyze endpoint
+        const manifestResponse = await fetch(window.location.origin + '/.well-known/agent.json');
+        if (!manifestResponse.ok) {
+          throw new Error('Failed to get agent manifest');
+        }
+        const manifest = await manifestResponse.json();
+        console.log('Agent manifest:', manifest);
+        
+        // Find analyze endpoint URL
+        const analyzeEndpoint = manifest.endpoints?.find((e: any) => e.key === 'analyze');
+        if (!analyzeEndpoint) {
+          throw new Error('analyze endpoint not found in manifest');
+        }
+        
+        const endpointUrl = new URL(analyzeEndpoint.url, window.location.origin).toString();
+        console.log('Calling endpoint:', endpointUrl);
+        
+        // Step 2: Send request to the actual endpoint
+        let response = await fetch(endpointUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            entrypoint: 'analyze',
-            input: { symbol, timeframe }
+            symbol: symbol,
+            timeframe: timeframe
           })
         });
         
