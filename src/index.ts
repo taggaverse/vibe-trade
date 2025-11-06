@@ -15,12 +15,16 @@ const server = Bun.serve({
         if (response.headers.get("content-type")?.includes("text/html")) {
           let html = await response.text();
           
+          // Remove x402-fetch - evmAsk.js handles frontend payments
+          html = html.replace(/<script[^>]*x402-fetch[^>]*><\/script>/gi, "");
+          html = html.replace(/<script[^>]*src="https:\/\/cdn\.jsdelivr\.net\/npm\/x402-fetch[^>]*><\/script>/gi, "");
+          
           // Inject ethereum provider guard BEFORE any scripts load
           // This allows evmAsk.js to redefine it without collision
           const guardScript = `<script>
 (function() {
   // Pre-define window.ethereum with configurable: true
-  // This allows evmAsk.js and other libraries to redefine it
+  // This allows evmAsk.js to redefine it without collision
   if (!window.ethereum) {
     try {
       Object.defineProperty(window, 'ethereum', {
