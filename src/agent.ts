@@ -11,6 +11,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { C2CManager, C2CProjector, textToKVCache } from "./c2c-wrapper";
 import { TrainingDataCollector } from "./training-data-collector";
 import { getHyperliquidPerpData, analyzeFundingRate, getFundingSummary, getX402PerpData } from "./hyperliquid-perps";
+import { compareExchanges, getMultiExchangeData } from "./exchange-data";
+import { INDICATOR_GROUPS, SUPPORTED_EXCHANGES } from "./taapi-indicators";
 
 /**
  * Vibe Trade - AI-Powered Trading Intelligence Nanoservice
@@ -549,11 +551,11 @@ addEntrypoint({
   },
 });
 
-// x402 Perpetuals Funding Endpoint - Query Hyperliquid funding rates for all or specific markets
+// x402 Perpetuals Funding Endpoint - Query Hyperliquid funding rates + multi-exchange technical analysis
 addEntrypoint({
   key: "perps-funding",
   description:
-    "Get perpetuals funding rates from Hyperliquid. Query all markets or specific symbols. Returns funding rate, time to next payment, open interest, and long/short skew.",
+    "Get perpetuals funding rates from Hyperliquid with multi-exchange technical analysis. Returns funding rate, time to next payment, open interest, skew, and technical indicators from multiple exchanges.",
   input: z.object({
     markets: z
       .array(z.string())
@@ -566,6 +568,21 @@ addEntrypoint({
       .optional()
       .default(["hyperliquid"])
       .describe("Perpetuals exchanges to query (currently supports 'hyperliquid')"),
+    timeframe: z
+      .string()
+      .optional()
+      .default("1h")
+      .describe("Timeframe for technical analysis (1m, 5m, 15m, 30m, 1h, 2h, 4h, 12h, 1d, 1w)"),
+    include_technicals: z
+      .boolean()
+      .optional()
+      .default(true)
+      .describe("Include multi-exchange technical indicators (RSI, MACD, Bollinger Bands)"),
+    exchanges: z
+      .array(z.string())
+      .optional()
+      .default(["binancefutures", "bybit"])
+      .describe("Exchanges to query for technical indicators"),
   }),
   price: "10000", // $0.01 USDC in wei
   output: z.object({
@@ -582,17 +599,45 @@ addEntrypoint({
         premium: z.number(),
         day_volume: z.number(),
         timestamp: z.number(),
+        // NEW: Multi-exchange technical data
+        technicals: z
+          .object({
+            exchanges: z.array(
+              z.object({
+                exchange: z.string(),
+                price: z.number(),
+                volume: z.number(),
+                rsi: z.number().optional(),
+                macd: z.any().optional(),
+                bbands: z.any().optional(),
+              })
+            ),
+            analysis: z.object({
+              price_spread: z.number(),
+              signal_agreement: z.number(),
+              recommendation: z.string(),
+            }),
+          })
+          .optional(),
       })
     ),
     timestamp: z.number(),
     total_markets: z.number(),
+    metadata: z.object({
+      timeframe: z.string(),
+      exchanges_queried: z.array(z.string()),
+      includes_technicals: z.boolean(),
+    }),
   }),
   async handler(ctx) {
     const markets = ctx.input.markets;
     const venueIds = ctx.input.venue_ids || ["hyperliquid"];
+    const timeframe = ctx.input.timeframe || "1h";
+    const includeTechnicals = ctx.input.include_technicals !== false;
+    const exchanges = ctx.input.exchanges || ["binancefutures", "bybit"];
 
     console.log(
-      `[vibe-trade] Perps funding query: venues=${venueIds.join(",")}, markets=${markets ? markets.join(",") : "all"}`
+      `[vibe-trade] Perps funding query: venues=${venueIds.join(",")}, markets=${markets ? markets.join(",") : "all"}, timeframe=${timeframe}`
     );
 
     // Currently only support Hyperliquid
@@ -602,19 +647,103 @@ addEntrypoint({
       );
     }
 
-    // Query Hyperliquid
+    // Query Hyperliquid funding data
     const result = await getX402PerpData(markets, 3000);
 
     if (!result.success || !result.data) {
       throw new Error("Failed to fetch perpetuals funding data from Hyperliquid");
     }
 
+    // Enhance with multi-exchange technical data if requested
+    let enhancedMarkets = result.data.markets;
+
+    if (includeTechnicals && result.data.markets.length > 0) {
+      console.log(
+        `[vibe-trade] Fetching technical data from ${exchanges.join(",")} for ${result.data.markets.length} markets`
+      );
+
+      // Get technical data for each market from multiple exchanges in parallel
+      enhancedMarkets = await Promise.all(
+        result.data.markets.map(async (market) => {
+          try {
+            // Query multiple exchanges for this market
+            const technicalData = await getMultiExchangeData(
+              exchanges,
+              `${market.symbol}/USDT`,
+              timeframe,
+              INDICATOR_GROUPS.perpetuals,
+              { backtrack: 5, timeout: 2000 }
+            );
+
+            if (technicalData.length > 0) {
+              // Calculate price spread and signal agreement
+              const prices = technicalData.map((d) => d.price);
+              const maxPrice = Math.max(...prices);
+              const minPrice = Math.min(...prices);
+              const priceSpread = ((maxPrice - minPrice) / minPrice) * 100;
+
+              // Calculate RSI agreement
+              const rsiValues = technicalData
+                .map((d) => d.indicators.rsi)
+                .filter((rsi) => rsi !== undefined);
+              const bullishRSI = rsiValues.filter((rsi) => rsi > 60).length;
+              const signalAgreement =
+                rsiValues.length > 0 ? bullishRSI / rsiValues.length : 0.5;
+
+              // Generate recommendation based on funding + technicals
+              let recommendation = "NEUTRAL";
+              if (market.funding_rate > 0.0001 && signalAgreement > 0.6) {
+                recommendation = "SHORT";
+              } else if (market.funding_rate < -0.0001 && signalAgreement < 0.4) {
+                recommendation = "LONG";
+              }
+
+              return {
+                ...market,
+                technicals: {
+                  exchanges: technicalData.map((d) => ({
+                    exchange: d.exchange,
+                    price: d.price,
+                    volume: d.volume,
+                    rsi: d.indicators.rsi,
+                    macd: d.indicators.macd,
+                    bbands: d.indicators.bbands,
+                  })),
+                  analysis: {
+                    price_spread: priceSpread,
+                    signal_agreement: signalAgreement,
+                    recommendation,
+                  },
+                },
+              };
+            }
+
+            return market;
+          } catch (error) {
+            console.warn(
+              `[vibe-trade] Failed to fetch technicals for ${market.symbol}:`,
+              error
+            );
+            return market;
+          }
+        })
+      );
+    }
+
     console.log(
-      `[vibe-trade] Returned funding data for ${result.data.total_markets} markets`
+      `[vibe-trade] Returned funding data for ${result.data.total_markets} markets with ${includeTechnicals ? "technical analysis" : "no technical analysis"}`
     );
 
     return {
-      output: result.data,
+      output: {
+        ...result.data,
+        markets: enhancedMarkets,
+        metadata: {
+          timeframe,
+          exchanges_queried: exchanges,
+          includes_technicals: includeTechnicals,
+        },
+      },
       model: "vibe-trade-v1",
     };
   },
